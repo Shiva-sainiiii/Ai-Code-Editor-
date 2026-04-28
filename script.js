@@ -180,3 +180,43 @@ document.getElementById('save-btn').addEventListener('click', () => {
     alert('Project saved locally!');
 });
           
+// Mobile View Controller
+const mobileBtns = document.querySelectorAll('.m-nav-btn');
+const mobileSections = {
+    'explorer-drawer': document.getElementById('explorer-drawer'),
+    'monaco-container': document.getElementById('monaco-container'),
+    'ai-sidebar': document.getElementById('ai-sidebar'),
+    'bottom-panel': document.getElementById('bottom-panel')
+};
+
+mobileBtns.forEach(btn => {
+    btn.addEventListener('click', () => {
+        const target = btn.getAttribute('data-tab');
+
+        // Remove active class from all buttons and sections
+        mobileBtns.forEach(b => b.classList.remove('active'));
+        Object.values(mobileSections).forEach(sec => sec.classList.remove('mobile-active'));
+
+        // Add active to clicked
+        btn.classList.add('active');
+        mobileSections[target].classList.add('mobile-active');
+
+        // Special case: If explorer is selected, show it as an overlay
+        if (target === 'explorer-drawer') {
+            mobileSections[target].style.display = 'flex';
+        } else {
+            document.getElementById('explorer-drawer').style.display = 'none';
+        }
+
+        // Refresh Monaco Layout (Important for resizing)
+        if (target === 'monaco-container' && editor) {
+            editor.layout();
+        }
+    });
+});
+
+// Default mobile view
+if (window.innerWidth <= 768) {
+    document.getElementById('monaco-container').classList.add('mobile-active');
+    document.querySelector('[data-tab="monaco-container"]').classList.add('active');
+}
