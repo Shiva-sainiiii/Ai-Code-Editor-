@@ -1,130 +1,71 @@
 /**
- * NEXUS AI - FIREBASE ENGINE
- * Handles Database Synchronization and Authentication
+ * API ROUTE: /api/ask
+ * BACKEND: Vercel Serverless Function
+ * AI MODEL: nvidia/nemotron-3-super-120b-a12b:free (via OpenRouter)
  */
 
-// Initialize Firebase with the provided config
-const firebaseConfig = {
-    apiKey: "AIzaSyBeiIUdVEv5kvJ6GFSzWZwFav8Nx3Mxhkg",
-    authDomain: "code-editor-ai.firebaseapp.com",
-    projectId: "code-editor-ai",
-    storageBucket: "code-editor-ai.firebasestorage.app",
-    messagingSenderId: "145185559673",
-    appId: "1:145185559673:web:5646addc66bb365209b0a8",
-    measurementId: "G-CYWKWQJGP0"
-};
-
-firebase.initializeApp(firebaseConfig);
-
-const db = firebase.firestore();
-const auth = firebase.auth();
-const provider = new firebase.auth.GoogleAuthProvider();
-
-/**
- * AUTHENTICATION
- */
-async function signInWithGoogle() {
-    try {
-        const result = await auth.signInWithPopup(provider);
-        console.log("User signed in:", result.user.displayName);
-        loadUserFiles(); // Refresh files on login
-        return result.user;
-    } catch (error) {
-        console.error("Auth Error:", error.message);
-    }
-}
-
-function signOut() {
-    auth.signOut().then(() => {
-        window.location.reload();
-    });
-}
-
-/**
- * FIRESTORE OPERATIONS
- */
-
-// Save current code to Firestore
-async function saveProjectToCloud(fileName, code, language) {
-    const user = auth.currentUser;
-    if (!user) {
-        alert("Please login to save projects to the cloud.");
-        return;
+export default async function handler(req, res) {
+    if (req.method !== 'POST') {
+        return res.status(405).json({ message: 'Method Not Allowed' });
     }
 
-    try {
-        await db.collection("users").doc(user.uid).collection("projects").doc(fileName).set({
-            name: fileName,
-            content: code,
-            language: language,
-            updatedAt: firebase.firestore.FieldValue.serverTimestamp()
-        }, { merge: true });
+    const { prompt, code, language } = req.body;
+
+    // Constructing a high-intent system prompt to ensure structured JSON output
+    const systemMessage = `
+        You are Nexus AI, a pro-level coding assistant integrated into a VS Code-like editor.
+        Your goal is to provide precise, high-quality code and explanations.
         
-        console.log("Project saved to cloud successfully!");
-        loadUserFiles(); 
-    } catch (error) {
-        console.error("Error saving project:", error);
-    }
-}
+        RULES:
+        1. Always return a valid JSON object.
+        2. Format: { "code": "string", "explanation": "string" }
+        3. If the user asks for a change, provide the full updated code in the "code" field.
+        4. If the user asks a question, put the answer in "explanation".
+        5. Current Language Context: ${language}
+    `;
 
-// Fetch all files for the current user
-async function loadUserFiles() {
-    const user = auth.currentUser;
-    if (!user) return;
+    const userMessage = `
+        Context Code:
+        \`\`\`${language}
+        ${code}
+        \`\`\`
 
-    const fileListContainer = document.getElementById('file-tree');
-    
+        User Request: ${prompt}
+    `;
+
     try {
-        const snapshot = await db.collection("users").doc(user.uid).collection("projects")
-            .orderBy("updatedAt", "desc")
-            .get();
-
-        if (snapshot.empty) return;
-
-        // Clear and rebuild file list
-        fileListContainer.innerHTML = '';
-        
-        snapshot.forEach(doc => {
-            const data = doc.data();
-            const fileItem = document.createElement('div');
-            fileItem.className = 'file-item';
-            fileItem.innerHTML = `<i class="far fa-file-code"></i> <span>${data.name}</span>`;
-            
-            fileItem.onclick = () => {
-                editor.setValue(data.content);
-                document.getElementById('language-selector').value = data.language;
-                monaco.editor.setModelLanguage(editor.getModel(), data.language);
-            };
-
-            fileListContainer.appendChild(fileItem);
+        const response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
+            method: "POST",
+            headers: {
+                "Authorization": `Bearer ${process.env.OPENROUTER_API_KEY}`, // Set this in Vercel
+                "HTTP-Referer": "https://nexus-ai-editor.vercel.app", // Optional
+                "X-Title": "Nexus AI Code Editor", // Optional
+                "Content-Type": "application/json"
+            },
+            body: JSON.stringify({
+                "model": "nvidia/nemotron-3-super-120b-a12b:free",
+                "messages": [
+                    { "role": "system", "content": systemMessage },
+                    { "role": "user", "content": userMessage }
+                ],
+                "response_format": { "type": "json_object" } // Ensures the model stays in JSON mode
+            })
         });
+
+        const data = await response.json();
+
+        // OpenRouter returns data in choices[0].message.content
+        if (data.choices && data.choices[0]) {
+            const aiResponse = JSON.parse(data.choices[0].message.content);
+            return res.status(200).json(aiResponse);
+        } else {
+            console.error("OpenRouter Error:", data);
+            return res.status(500).json({ message: "AI Model Error", details: data });
+        }
+
     } catch (error) {
-        console.error("Error loading files:", error);
+        console.error("Server Error:", error);
+        return res.status(500).json({ message: "Internal Server Error", error: error.message });
     }
 }
-
-/**
- * OBSERVERS & UI INTEGRATION
- */
-auth.onAuthStateChanged((user) => {
-    const loginBtn = document.getElementById('login-btn');
-    if (user) {
-        loginBtn.innerHTML = `<img src="${user.photoURL}" style="width:24px; border-radius:50%;">`;
-        loginBtn.title = `Signed in as ${user.displayName}`;
-        loadUserFiles();
-    } else {
-        loginBtn.innerHTML = `<i class="far fa-user-circle"></i>`;
-        loginBtn.onclick = signInWithGoogle;
-    }
-});
-
-// Intercept the Save button from script.js
-document.getElementById('save-btn').addEventListener('click', () => {
-    const fileName = prompt("Enter file name (e.g., main.js):", "index.js");
-    if (fileName) {
-        const code = editor.getValue();
-        const lang = document.getElementById('language-selector').value;
-        saveProjectToCloud(fileName, code, lang);
-    }
-});
-          
+    
