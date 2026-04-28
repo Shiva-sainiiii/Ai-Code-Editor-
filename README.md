@@ -69,7 +69,7 @@ nexus-ai/
 └── api/
     └── ask.js        # AI Backend API
 
-
+```
 ---
 
 🚀 Setup
