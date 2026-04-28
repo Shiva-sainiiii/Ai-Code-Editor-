@@ -1,0 +1,128 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Nexus AI | Pro Code Editor</title>
+    <meta name="description" content="Next-gen AI-powered code editor in your browser.">
+    
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    
+    <link rel="stylesheet" href="style.css">
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/monaco-editor/0.44.0/min/vs/loader.min.js"></script>
+</head>
+<body class="dark-theme">
+
+    <div class="app-container">
+        <aside class="sidebar">
+            <div class="logo">
+                <div class="logo-icon"><i class="fas fa-bolt"></i></div>
+            </div>
+            <nav class="nav-icons">
+                <button class="nav-btn active" title="Explorer" data-view="explorer"><i class="far fa-copy"></i></button>
+                <button class="nav-btn" title="Search" data-view="search"><i class="fas fa-search"></i></button>
+                <button class="nav-btn" title="AI Assistant" data-view="ai"><i class="fas fa-robot"></i></button>
+                <button class="nav-btn" title="Extensions" data-view="extensions"><i class="fas fa-th-large"></i></button>
+            </nav>
+            <div class="nav-bottom">
+                <button class="nav-btn" id="login-btn" title="Profile"><i class="far fa-user-circle"></i></button>
+                <button class="nav-btn" title="Settings"><i class="fas fa-cog"></i></button>
+            </div>
+        </aside>
+
+        <div class="drawer" id="explorer-drawer">
+            <div class="drawer-header">
+                <span>EXPLORER</span>
+                <div class="header-actions">
+                    <button id="new-file" title="New File"><i class="fas fa-file-plus"></i></button>
+                    <button id="refresh-files" title="Refresh"><i class="fas fa-sync-alt"></i></button>
+                </div>
+            </div>
+            <div class="file-list" id="file-tree">
+                <div class="file-item active" data-lang="javascript">
+                    <i class="fab fa-js-square js-icon"></i> <span>index.js</span>
+                </div>
+            </div>
+        </div>
+
+        <main class="workspace">
+            <header class="editor-header">
+                <div class="tab-container">
+                    <div class="tab active">
+                        <i class="fab fa-js-square"></i>
+                        <span>index.js</span>
+                        <i class="fas fa-times close-tab"></i>
+                    </div>
+                </div>
+                
+                <div class="editor-actions">
+                    <select id="language-selector" class="select-dropdown">
+                        <option value="javascript">JavaScript</option>
+                        <option value="html">HTML</option>
+                        <option value="css">CSS</option>
+                        <option value="python">Python</option>
+                        <option value="cpp">C++</option>
+                        <option value="java">Java</option>
+                    </select>
+                    <button class="btn btn-secondary" id="save-btn"><i class="far fa-save"></i> Save</button>
+                    <button class="btn btn-primary" id="run-btn"><i class="fas fa-play"></i> Run</button>
+                </div>
+            </header>
+
+            <div class="editor-layout">
+                <div id="monaco-container"></div>
+                
+                <div class="ai-panel" id="ai-sidebar">
+                    <div class="ai-header">
+                        <div class="ai-title"><i class="fas fa-sparkles"></i> Nexus AI</div>
+                        <button class="close-ai" id="toggle-ai"><i class="fas fa-chevron-right"></i></button>
+                    </div>
+                    <div class="ai-messages" id="ai-chat-history">
+                        <div class="ai-message bot">
+                            Hello! I'm Nexus AI. How can I help you build today?
+                        </div>
+                    </div>
+                    <div class="ai-input-container">
+                        <div class="ai-tools">
+                            <button class="tool-btn" data-action="fix">Fix Bugs</button>
+                            <button class="tool-btn" data-action="explain">Explain</button>
+                            <button class="tool-btn" data-action="optimize">Optimize</button>
+                        </div>
+                        <div class="input-wrapper">
+                            <textarea id="ai-prompt" placeholder="Ask AI to generate or edit code..."></textarea>
+                            <button id="send-ai-btn"><i class="fas fa-paper-plane"></i></button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="bottom-panel" id="bottom-panel">
+                <div class="panel-tabs">
+                    <button class="panel-tab active" data-target="preview-content">Live Preview</button>
+                    <button class="panel-tab" data-target="terminal-content">Console</button>
+                </div>
+                <div class="panel-body">
+                    <div id="preview-content" class="panel-view active">
+                        <iframe id="output-frame"></iframe>
+                    </div>
+                    <div id="terminal-content" class="panel-view">
+                        <div id="terminal">Welcome to Nexus AI Terminal v1.0.0...</div>
+                    </div>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-auth-compat.js"></script>
+
+    <script src="firebase.js"></script>
+    <script src="script.js"></script>
+</body>
+  </html>
+                          
