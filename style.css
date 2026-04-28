@@ -442,3 +442,105 @@ body {
     }
       }
   
+
+
+        /* --- MOBILE RESPONSIVENESS --- */
+
+@media (max-width: 768px) {
+    /* Hide desktop elements */
+    .sidebar, .drawer {
+        display: none;
+    }
+
+    .app-container {
+        flex-direction: column;
+    }
+
+    /* Workspace takes full height minus mobile nav */
+    .workspace {
+        height: calc(100vh - 60px);
+    }
+
+    /* Stack editor and panels as full-screen layers */
+    .editor-layout {
+        position: relative;
+    }
+
+    #monaco-container, .ai-panel, .bottom-panel {
+        position: absolute;
+        top: 0;
+        left: 0;
+        width: 100% !important;
+        height: 100% !important;
+        display: none;
+        background: var(--bg-main);
+    }
+
+    /* Show only the active mobile tab */
+    .mobile-active {
+        display: flex !important;
+        z-index: 10;
+    }
+
+    /* Adjust Header for mobile */
+    .editor-header {
+        padding: 0 10px;
+    }
+    
+    .editor-actions .btn span {
+        display: none; /* Hide text, show only icons */
+    }
+
+    .ai-panel {
+        border-left: none;
+    }
+
+    /* Bottom Nav Styling */
+    .mobile-nav {
+        display: flex;
+        position: fixed;
+        bottom: 0;
+        width: 100%;
+        height: 60px;
+        background: var(--bg-sidebar);
+        border-top: 1px solid var(--border-color);
+        justify-content: space-around;
+        align-items: center;
+        z-index: 1000;
+    }
+
+    .m-nav-btn {
+        background: none;
+        border: none;
+        color: var(--text-muted);
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        font-size: 18px;
+        gap: 4px;
+    }
+
+    .m-nav-btn span {
+        font-size: 10px;
+        font-weight: 500;
+    }
+
+    .m-nav-btn.active {
+        color: var(--accent-primary);
+    }
+
+    /* Floating AI drawer on mobile */
+    #explorer-drawer {
+        position: fixed;
+        top: 45px;
+        left: 0;
+        bottom: 60px;
+        width: 80%;
+        z-index: 200;
+        box-shadow: 20px 0 50px rgba(0,0,0,0.5);
+    }
+}
+
+/* Specific view logic */
+#monaco-container.mobile-active { display: block !important; }
+            
