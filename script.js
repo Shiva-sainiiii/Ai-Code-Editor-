@@ -327,48 +327,31 @@ class AIAssistant {
         }
     }
 
-    async callAIAPI(data) {
-        const apiKey = localStorage.getItem('openaiKey');
-        if (!apiKey) {
-            throw new Error('No OpenAI API key configured. Add it in settings.');
-        }
+async callAIAPI(data) {
 
-        const systemPrompt = `You are Nexus AI, an expert code assistant.
-        Current file: ${data.fileName}
-        Language: ${data.language}
-        Be concise and practical. If providing code, wrap it in \`\`\`${data.language}\n...\`\`\``;
+    const response = await fetch('/api/ask', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+            prompt: data.prompt,
+            code: data.code,
+            language: data.language
+        })
+    });
 
-        const response = await fetch('https://api.openai.com/v1/chat/completions', {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-                'Authorization': `Bearer ${apiKey}`
-            },
-            body: JSON.stringify({
-                model: 'gpt-3.5-turbo',
-                messages: [
-                    { role: 'system', content: systemPrompt },
-                    { role: 'user', content: `${data.action}\n\nCode:\n${data.code}\n\nQuestion: ${data.prompt}` }
-                ],
-                max_tokens: 2000,
-                temperature: 0.7
-            })
-        });
+    const result = await response.json();
 
-        if (!response.ok) {
-            const error = await response.json();
-            throw new Error(error.error?.message || 'OpenAI API error');
-        }
-
-        const result = await response.json();
-        const content = result.choices[0].message.content;
-
-        const codeMatch = content.match(/```[\w]*\n([\s\S]*?)```/);
-        return {
-            code: codeMatch ? codeMatch[1] : null,
-            explanation: content.replace(/```[\w]*\n[\s\S]*?```/g, '').trim()
-        };
+    if (!response.ok || !result.success) {
+        throw new Error(result.detail || result.message || 'AI request failed');
     }
+
+    return {
+        code: result.data.code,
+        explanation: result.data.explanation
+    };
+}
 
     detectAction(prompt) {
         const lower = prompt.toLowerCase();
