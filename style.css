@@ -1,5 +1,5 @@
 /* ════════════════════════════════════════════════════════════
-   NEXUS AI — PRO STYLESHEET v2.0
+   NEXUS AI — PRO STYLESHEET v3.0
    Design: Glassmorphism · Dark Cyber · Animated
 ════════════════════════════════════════════════════════════ */
 
@@ -911,7 +911,7 @@ body {
 
     .lang-grid { grid-template-columns: repeat(3,1fr); }
 
-    #particles-js { display:none; } /* performance on mobile */
+    #particles-js { display:none; }
 }
 
 /* ── Small mobile ── */

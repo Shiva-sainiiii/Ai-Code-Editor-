@@ -9,13 +9,13 @@
 // ============================================
 
 const firebaseConfig = {
-    apiKey: import.meta.env?.VITE_FIREBASE_API_KEY || "AIzaSyBeiIUdVEv5kvJ6GFSzWZwFav8Nx3Mxhkg",
-    authDomain: import.meta.env?.VITE_FIREBASE_AUTH_DOMAIN || "code-editor-ai.firebaseapp.com",
-    projectId: import.meta.env?.VITE_FIREBASE_PROJECT_ID || "code-editor-ai",
-    storageBucket: import.meta.env?.VITE_FIREBASE_STORAGE_BUCKET || "code-editor-ai.firebasestorage.app",
-    messagingSenderId: import.meta.env?.VITE_FIREBASE_MESSAGING_SENDER_ID || "145185559673",
-    appId: import.meta.env?.VITE_FIREBASE_APP_ID || "1:145185559673:web:5646addc66bb365209b0a8",
-    measurementId: import.meta.env?.VITE_FIREBASE_MEASUREMENT_ID || "G-CYWKWQJGP0"
+    apiKey: "AIzaSyBeiIUdVEv5kvJ6GFSzWZwFav8Nx3Mxhkg",
+    authDomain: "code-editor-ai.firebaseapp.com",
+    projectId: "code-editor-ai",
+    storageBucket: "code-editor-ai.firebasestorage.app",
+    messagingSenderId: "145185559673",
+    appId: "1:145185559673:web:5646addc66bb365209b0a8",
+    measurementId: "G-CYWKWQJGP0"
 };
 
 try {
@@ -497,85 +497,4 @@ class CollaborationService {
                 .doc(docId)
                 .update({
                     shared: true,
-                    sharedAt: firebase.firestore.FieldValue.serverTimestamp()
-                });
-
-            const shareUrl = `${window.location.origin}?project=${user.uid}/${docId}`;
-            AuthService.showNotification(`🔗 Share link: ${shareUrl}`, 'success');
-            return shareUrl;
-        } catch (error) {
-            console.error("❌ Share error:", error);
-            AuthService.showNotification('Failed to create share link', 'error');
-        }
-    }
-}
-
-// ============================================
-// 5. INITIALIZATION & EVENT LISTENERS
-// ============================================
-
-// Monitor auth state
-auth.onAuthStateChanged((user) => {
-    AuthService.updateUIState(user);
-    if (user) {
-        FileService.loadUserFiles();
-        console.log('✅ User signed in:', user.displayName);
-    }
-});
-
-// Save to cloud button integration
-document.addEventListener('DOMContentLoaded', () => {
-    const saveBtn = document.getElementById('save-btn');
-    if (saveBtn) {
-        const originalListener = saveBtn.onclick;
-        saveBtn.addEventListener('click', async (e) => {
-            if (auth.currentUser && window.editor) {
-                const fileName = prompt("Save to cloud? Enter file name:", window.currentFileName || "untitled.js");
-                if (fileName) {
-                    const code = window.editor.getValue();
-                    const lang = document.getElementById('language-selector')?.value || 'javascript';
-                    await FileService.saveToCloud(fileName, code, lang);
-                }
-            }
-        });
-    }
-});
-
-// Refresh cloud files button
-document.addEventListener('DOMContentLoaded', () => {
-    const refreshBtn = document.getElementById('refresh-files');
-    if (refreshBtn) {
-        refreshBtn.addEventListener('click', async () => {
-            const user = auth.currentUser;
-            if (user) {
-                await FileService.loadUserFiles();
-                AuthService.showNotification('Files refreshed', 'success');
-            } else {
-                AuthService.showNotification('Sign in to sync cloud files', 'warning');
-            }
-        });
-    }
-});
-
-// Auto-save to cloud (every 5 minutes if signed in)
-setInterval(async () => {
-    if (auth.currentUser && window.editor && window.unsavedChanges) {
-        const code = window.editor.getValue();
-        if (code && code.length > 0) {
-            await FileService.saveToCloud(
-                window.currentFileName || 'auto-backup.js',
-                code,
-                document.getElementById('language-selector')?.value || 'javascript'
-            );
-        }
-    }
-}, 5 * 60 * 1000);
-
-// ============================================
-// 6. EXPOSE TO GLOBAL SCOPE
-// ============================================
-window.AuthService = AuthService;
-window.FileService = FileService;
-window.CollaborationService = CollaborationService;
-
-console.log('✅ Nexus AI Firebase Engine v3.0 loaded');
+                    sharedAt: firebase.fire*
