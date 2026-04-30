@@ -1,86 +1,281 @@
 /**
- * NEXUS AI - CORE ENGINE v2.0
- * Manages Monaco Editor, AI interactions, UI state, and local persistence
+ * NEXUS AI - CORE ENGINE v3.0
+ * Fully updated for enhanced UI with modals, inline AI, bottom panel, and file management
+ * Manages Monaco Editor, AI interactions, file system, and UI state
  */
 
 let editor;
 let currentLanguage = 'javascript';
+let currentFileName = 'untitled.js';
 let isEditorReady = false;
 let unsavedChanges = false;
+let openTabs = [];
+let activeTabFile = null;
 
 // ============================================
-// 1. MONACO EDITOR INITIALIZATION
+// 1. INITIALIZATION & DOM READY
 // ============================================
-require.config({ 
-    paths: { 
-        vs: 'https://cdnjs.cloudflare.com/ajax/libs/monaco-editor/0.44.0/min/vs' 
-    } 
+window.addEventListener('DOMContentLoaded', () => {
+    // Hide splash screen and show app
+    setTimeout(() => {
+        const splash = document.getElementById('splash-screen');
+        splash.classList.add('hidden');
+        document.getElementById('app-container').classList.add('loaded');
+    }, 2800);
+
+    initializeEditor();
+    initializeEventListeners();
+    initializeFileManager();
+    loadLocalFiles();
 });
 
-require(['vs/editor/editor.main'], function () {
-    const defaultCode = localStorage.getItem('lastCode') || [
-        '// Welcome to Nexus AI',
-        'function greet() {',
-        '    console.log("Hello, world!");',
-        '}',
-        '',
-        'greet();'
-    ].join('\n');
-
-    editor = monaco.editor.create(document.getElementById('monaco-container'), {
-        value: defaultCode,
-        language: 'javascript',
-        theme: 'vs-dark',
-        automaticLayout: true,
-        fontSize: 14,
-        fontFamily: 'JetBrains Mono',
-        minimap: { enabled: true, scale: 1 },
-        cursorSmoothCaretAnimation: "on",
-        smoothScrolling: true,
-        padding: { top: 20 },
-        roundedSelection: true,
-        wordWrap: 'on',
-        formatOnPaste: true,
-        formatOnType: true,
-        scrollbar: {
-            vertical: 'visible',
-            horizontal: 'visible',
-            useShadows: false,
-            verticalHasArrows: false,
-            horizontalHasArrows: false,
-            verticalScrollbarSize: 10,
-            horizontalScrollbarSize: 10
-        },
-        minimap: { enabled: true }
+// ============================================
+// 2. MONACO EDITOR INITIALIZATION
+// ============================================
+function initializeEditor() {
+    require.config({ 
+        paths: { 
+            vs: 'https://cdnjs.cloudflare.com/ajax/libs/monaco-editor/0.44.0/min/vs' 
+        } 
     });
 
-    isEditorReady = true;
+    require(['vs/editor/editor.main'], function () {
+        const defaultCode = localStorage.getItem('lastCode') || [
+            '// Welcome to Nexus AI',
+            '// Start coding here...',
+            '',
+            'function greet() {',
+            '    console.log("Hello, World!");',
+            '}',
+            '',
+            'greet();'
+        ].join('\n');
 
-    // Track unsaved changes
+        editor = monaco.editor.create(document.getElementById('monaco-container'), {
+            value: defaultCode,
+            language: 'javascript',
+            theme: 'vs-dark',
+            automaticLayout: true,
+            fontSize: 14,
+            fontFamily: 'JetBrains Mono',
+            minimap: { enabled: true, scale: 1 },
+            cursorSmoothCaretAnimation: "on",
+            smoothScrolling: true,
+            padding: { top: 20, bottom: 20 },
+            roundedSelection: true,
+            wordWrap: 'on',
+            formatOnPaste: true,
+            formatOnType: true,
+            scrollbar: {
+                vertical: 'visible',
+                horizontal: 'visible',
+                useShadows: false,
+                verticalHasArrows: false,
+                horizontalHasArrows: false,
+                verticalScrollbarSize: 10,
+                horizontalScrollbarSize: 10
+            },
+            lineNumbers: 'on',
+            renderWhitespace: 'selection',
+            bracketPairColorization: true
+        });
+
+        isEditorReady = true;
+        updateEditorStatus();
+        setupEditorListeners();
+        console.log('✅ Monaco Editor initialized v3.0');
+    });
+}
+
+function setupEditorListeners() {
+    // Track changes
     editor.onDidChangeModelContent(() => {
         unsavedChanges = true;
+        updateEditorStatus();
+        updateStorageInfo();
         localStorage.setItem('lastCode', editor.getValue());
+        updateSaveButton();
+    });
+
+    // Update position display
+    editor.onDidChangeCursorPosition((e) => {
+        const line = e.position.lineNumber;
+        const col = e.position.column;
+        document.getElementById('status-pos').textContent = `Ln ${line}, Col ${col}`;
     });
 
     // Language selector sync
     document.getElementById('language-selector').addEventListener('change', (e) => {
-        const lang = e.target.value;
-        monaco.editor.setModelLanguage(editor.getModel(), lang);
-        currentLanguage = lang;
+        currentLanguage = e.target.value;
+        monaco.editor.setModelLanguage(editor.getModel(), currentLanguage);
+        updateEditorStatus();
     });
 
-    // Handle window resize
+    // Window resize
     window.addEventListener('resize', () => {
         if (editor && isEditorReady) {
             editor.layout();
         }
     });
+}
 
-    console.log('✅ Monaco Editor initialized successfully');
-});
+function updateEditorStatus() {
+    if (!isEditorReady) return;
+    
+    const langDisplay = currentLanguage.charAt(0).toUpperCase() + currentLanguage.slice(1);
+    document.getElementById('status-lang').innerHTML = 
+        `<i class="fas fa-circle" style="color:#007aff;font-size:8px"></i> ${langDisplay}`;
+    
+    document.getElementById('status-saved').innerHTML = unsavedChanges 
+        ? '<i class="fas fa-circle" style="color:#f59e0b;font-size:8px"></i> Unsaved' 
+        : '<i class="fas fa-check"></i> Saved';
+}
+
+function updateSaveButton() {
+    const saveBtn = document.getElementById('save-btn');
+    if (unsavedChanges) {
+        saveBtn.style.opacity = '1';
+        saveBtn.style.transform = 'scale(1.05)';
+    } else {
+        saveBtn.style.opacity = '0.7';
+    }
+}
 
 // ============================================
-// 2. AI ASSISTANT ENGINE
+// 3. FILE MANAGEMENT & TABS
+// ============================================
+class FileManager {
+    static openFile(fileName, code, language) {
+        currentFileName = fileName;
+        currentLanguage = language || 'javascript';
+        
+        editor.setValue(code);
+        monaco.editor.setModelLanguage(editor.getModel(), currentLanguage);
+        document.getElementById('language-selector').value = currentLanguage;
+        unsavedChanges = false;
+        updateEditorStatus();
+        
+        this.addTab(fileName, language);
+        showNotification(`📂 Opened: ${fileName}`, 'success');
+    }
+
+    static addTab(fileName, language) {
+        const container = document.getElementById('tab-container');
+        
+        // Check if tab already exists
+        const existingTab = container.querySelector(`[data-file="${fileName}"]`);
+        if (existingTab) {
+            existingTab.classList.add('active');
+            return;
+        }
+
+        const tab = document.createElement('button');
+        tab.className = 'tab active';
+        tab.setAttribute('data-file', fileName);
+        tab.innerHTML = `
+            <span class="tab-name">${fileName}</span>
+            <button class="close-tab" onclick="event.stopPropagation(); FileManager.closeTab('${fileName}')">
+                <i class="fas fa-times"></i>
+            </button>
+        `;
+
+        tab.addEventListener('click', () => {
+            document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+            tab.classList.add('active');
+            const file = openTabs.find(f => f.name === fileName);
+            if (file) this.openFile(file.name, file.code, file.language);
+        });
+
+        container.appendChild(tab);
+        openTabs.push({ name: fileName, code: editor.getValue(), language: currentLanguage });
+    }
+
+    static closeTab(fileName) {
+        const tab = document.querySelector(`[data-file="${fileName}"]`);
+        if (tab) tab.remove();
+        
+        openTabs = openTabs.filter(f => f.name !== fileName);
+        
+        const remainingTabs = document.querySelectorAll('.tab');
+        if (remainingTabs.length > 0) {
+            remainingTabs[remainingTabs.length - 1].click();
+        }
+    }
+
+    static createNewFile() {
+        const modal = document.getElementById('new-file-modal');
+        modal.classList.add('open');
+    }
+
+    static saveFile() {
+        const code = editor.getValue();
+        const backup = {
+            name: currentFileName,
+            code: code,
+            language: currentLanguage,
+            timestamp: new Date().toISOString()
+        };
+        
+        localStorage.setItem(`file_${currentFileName}`, JSON.stringify(backup));
+        unsavedChanges = false;
+        updateEditorStatus();
+        showNotification(`✅ Saved: ${currentFileName}`, 'success');
+    }
+}
+
+// ============================================
+// 4. MODAL MANAGEMENT
+// ============================================
+function setupModals() {
+    const newFileModal = document.getElementById('new-file-modal');
+    const deleteModal = document.getElementById('delete-modal');
+    
+    // Close modals
+    document.getElementById('close-modal').addEventListener('click', () => {
+        newFileModal.classList.remove('open');
+    });
+
+    document.getElementById('cancel-modal').addEventListener('click', () => {
+        newFileModal.classList.remove('open');
+    });
+
+    document.getElementById('close-delete-modal').addEventListener('click', () => {
+        deleteModal.classList.remove('open');
+    });
+
+    document.getElementById('cancel-delete').addEventListener('click', () => {
+        deleteModal.classList.remove('open');
+    });
+
+    // Create new file
+    document.getElementById('confirm-new-file').addEventListener('click', () => {
+        const fileName = document.getElementById('new-file-name').value.trim();
+        const language = document.querySelector('.lang-chip.active').getAttribute('data-lang');
+        
+        if (!fileName) {
+            showNotification('Please enter a file name', 'warning');
+            return;
+        }
+
+        const ext = document.querySelector('.lang-chip.active').getAttribute('data-ext');
+        const fullName = fileName.includes('.') ? fileName : `${fileName}.${ext}`;
+        
+        FileManager.openFile(fullName, '', language);
+        newFileModal.classList.remove('open');
+        document.getElementById('new-file-name').value = '';
+    });
+
+    // Language selection
+    document.querySelectorAll('.lang-chip').forEach(chip => {
+        chip.addEventListener('click', () => {
+            document.querySelectorAll('.lang-chip').forEach(c => c.classList.remove('active'));
+            chip.classList.add('active');
+        });
+    });
+}
+
+// ============================================
+// 5. AI ASSISTANT ENGINE
 // ============================================
 const aiPrompt = document.getElementById('ai-prompt');
 const sendAiBtn = document.getElementById('send-ai-btn');
@@ -93,29 +288,28 @@ class AIAssistant {
         this.restoreMessageHistory();
     }
 
-    /**
-     * Main AI query handler
-     */
     async ask(customPrompt = null) {
         if (this.isProcessing || !isEditorReady) return;
 
         const promptValue = customPrompt || aiPrompt.value.trim();
         if (!promptValue) {
-            this.showNotification('Please enter a prompt', 'warning');
+            showNotification('Please enter a prompt', 'warning');
             return;
         }
 
         this.isProcessing = true;
+        this.updateAIStatus(true);
         this.addMessage('user', promptValue);
         aiPrompt.value = '';
 
-        const botMsg = this.addMessage('bot', '<i class="fas fa-spinner fa-spin"></i> Analyzing...');
+        const botMsg = this.addMessage('bot', '<div class="typing-dots"><span></span><span></span><span></span></div>');
 
         try {
             const response = await this.callAIAPI({
                 prompt: promptValue,
                 code: editor.getValue(),
                 language: currentLanguage,
+                fileName: currentFileName,
                 action: this.detectAction(promptValue)
             });
 
@@ -126,50 +320,23 @@ class AIAssistant {
         } catch (error) {
             console.error('❌ AI Error:', error);
             botMsg.innerHTML = `<span style="color: #ef4444;">⚠️ Error: ${error.message}</span>`;
-            this.showNotification('AI service unavailable', 'error');
+            showNotification('AI service unavailable', 'error');
         } finally {
             this.isProcessing = false;
+            this.updateAIStatus(false);
         }
     }
 
-    /**
-     * Call AI API (supports multiple backends)
-     */
     async callAIAPI(data) {
-        // Primary: Your backend API
-        try {
-            const response = await fetch('/api/ask', {
-                method: 'POST',
-                headers: { 
-                    'Content-Type': 'application/json',
-                    'Authorization': `Bearer ${localStorage.getItem('aiToken')}`
-                },
-                body: JSON.stringify(data)
-            });
-
-            if (!response.ok) throw new Error(`API Error: ${response.status}`);
-            return await response.json();
-
-        } catch (error) {
-            console.warn('Backend API failed, trying fallback...');
-            
-            // Fallback: OpenAI API (requires API key in .env)
-            return await this.callOpenAIAPI(data);
-        }
-    }
-
-    /**
-     * OpenAI API fallback
-     */
-    async callOpenAIAPI(data) {
         const apiKey = localStorage.getItem('openaiKey');
         if (!apiKey) {
-            throw new Error('No AI API key configured');
+            throw new Error('No OpenAI API key configured. Add it in settings.');
         }
 
-        const systemPrompt = `You are Nexus AI, a code assistant. 
-        Current language: ${data.language}
-        Be concise. If providing code, wrap it in a code block.`;
+        const systemPrompt = `You are Nexus AI, an expert code assistant.
+        Current file: ${data.fileName}
+        Language: ${data.language}
+        Be concise and practical. If providing code, wrap it in \`\`\`${data.language}\n...\`\`\``;
 
         const response = await fetch('https://api.openai.com/v1/chat/completions', {
             method: 'POST',
@@ -181,9 +348,9 @@ class AIAssistant {
                 model: 'gpt-3.5-turbo',
                 messages: [
                     { role: 'system', content: systemPrompt },
-                    { role: 'user', content: `${data.action}\n\nCode:\n${data.code}` }
+                    { role: 'user', content: `${data.action}\n\nCode:\n${data.code}\n\nQuestion: ${data.prompt}` }
                 ],
-                max_tokens: 1000,
+                max_tokens: 2000,
                 temperature: 0.7
             })
         });
@@ -196,7 +363,6 @@ class AIAssistant {
         const result = await response.json();
         const content = result.choices[0].message.content;
 
-        // Parse response for code blocks
         const codeMatch = content.match(/```[\w]*\n([\s\S]*?)```/);
         return {
             code: codeMatch ? codeMatch[1] : null,
@@ -204,33 +370,22 @@ class AIAssistant {
         };
     }
 
-    /**
-     * Detect user intent from prompt
-     */
     detectAction(prompt) {
         const lower = prompt.toLowerCase();
-        if (lower.includes('fix') || lower.includes('bug') || lower.includes('error')) 
-            return 'fix';
-        if (lower.includes('explain') || lower.includes('what') || lower.includes('how'))
-            return 'explain';
-        if (lower.includes('optimize') || lower.includes('improve') || lower.includes('performance'))
-            return 'optimize';
-        if (lower.includes('add') || lower.includes('create') || lower.includes('generate'))
-            return 'generate';
-        return 'general';
+        if (lower.includes('fix') || lower.includes('bug')) return 'Fix bugs';
+        if (lower.includes('explain')) return 'Explain the logic';
+        if (lower.includes('optimize')) return 'Optimize for performance';
+        if (lower.includes('comment')) return 'Add detailed comments';
+        if (lower.includes('test')) return 'Generate test cases';
+        if (lower.includes('refactor')) return 'Refactor the code';
+        return 'Analyze and suggest improvements';
     }
 
-    /**
-     * Handle AI response and update editor
-     */
     handleAIResponse(response, botMsg) {
         if (response.code) {
             const lineCount = editor.getModel().getLineCount();
-            const range = new monaco.Range(
-                1, 1,
-                lineCount,
-                editor.getModel().getLineMaxColumn(lineCount)
-            );
+            const range = new monaco.Range(1, 1, lineCount, 
+                editor.getModel().getLineMaxColumn(lineCount));
 
             editor.executeEdits("nexus-ai", [{
                 range: range,
@@ -243,9 +398,11 @@ class AIAssistant {
                 <small>${response.explanation || 'Code has been modified'}</small>
                 <button onclick="document.dispatchEvent(new CustomEvent('acceptChanges'))" 
                     style="margin-top: 8px; padding: 4px 8px; background: #007aff; border: none; border-radius: 4px; color: white; cursor: pointer;">
-                    Accept Changes
+                    ✓ Accept Changes
                 </button>
             `;
+            unsavedChanges = true;
+            updateSaveButton();
         } else {
             botMsg.innerHTML = `
                 <strong>ℹ️ Analysis</strong><br>
@@ -256,183 +413,61 @@ class AIAssistant {
         chatHistory.scrollTop = chatHistory.scrollHeight;
     }
 
-    /**
-     * Add message to chat
-     */
     addMessage(type, content) {
         const msg = document.createElement('div');
         msg.className = `ai-message ${type}`;
-        msg.innerHTML = content;
+        
+        const msgContent = document.createElement('div');
+        msgContent.className = 'msg-content';
+        
+        const avatar = document.createElement('div');
+        avatar.className = 'msg-avatar';
+        avatar.innerHTML = type === 'bot' ? '<i class="fas fa-robot"></i>' : '<i class="fas fa-user"></i>';
+        
+        const bubble = document.createElement('div');
+        bubble.className = 'msg-bubble';
+        bubble.innerHTML = content;
+        
+        const time = document.createElement('div');
+        time.className = 'msg-time';
+        time.textContent = new Date().toLocaleTimeString();
+        
+        msgContent.appendChild(bubble);
+        msgContent.appendChild(time);
+        msg.appendChild(avatar);
+        msg.appendChild(msgContent);
+        
         chatHistory.appendChild(msg);
         chatHistory.scrollTop = chatHistory.scrollHeight;
         return msg;
     }
 
-    /**
-     * Restore chat history from localStorage
-     */
     restoreMessageHistory() {
         this.messageHistory.forEach(msg => {
             this.addMessage(msg.type, msg.content);
         });
     }
 
-    /**
-     * Clear chat history
-     */
     clearHistory() {
-        chatHistory.innerHTML = '';
+        chatHistory.innerHTML = '<div class="ai-message bot"><div class="msg-avatar"><i class="fas fa-robot"></i></div><div class="msg-content"><div class="msg-bubble">Chat cleared. How can I help?</div></div></div>';
         this.messageHistory = [];
         localStorage.removeItem('aiHistory');
-        this.addMessage('bot', 'Chat cleared. How can I help?');
     }
 
-    /**
-     * Show notifications
-     */
-    showNotification(msg, type = 'info') {
-        const notification = document.createElement('div');
-        notification.style.cssText = `
-            position: fixed;
-            top: 20px;
-            right: 20px;
-            padding: 12px 16px;
-            background: ${type === 'error' ? '#ef4444' : type === 'warning' ? '#f59e0b' : '#10b981'};
-            color: white;
-            border-radius: 6px;
-            z-index: 9999;
-            animation: slideIn 0.3s ease;
-        `;
-        notification.textContent = msg;
-        document.body.appendChild(notification);
-        setTimeout(() => notification.remove(), 3000);
+    updateAIStatus(processing) {
+        const aiStatus = document.getElementById('ai-status');
+        if (processing) {
+            aiStatus.innerHTML = '<i class="fas fa-circle-notch fa-spin" id="ai-spin"></i> Processing...';
+        } else {
+            aiStatus.innerHTML = '<i class="fas fa-sparkles" id="ai-idle"></i> AI Ready';
+        }
     }
 }
 
 const aiAssistant = new AIAssistant();
 
-// AI Event Listeners
-sendAiBtn.addEventListener('click', () => aiAssistant.ask());
-aiPrompt.addEventListener('keydown', (e) => {
-    if (e.key === 'Enter' && !e.shiftKey) {
-        e.preventDefault();
-        aiAssistant.ask();
-    }
-});
-
-// Quick AI Tools
-document.querySelectorAll('.tool-btn').forEach(btn => {
-    btn.addEventListener('click', () => {
-        const action = btn.getAttribute('data-action');
-        const prompts = {
-            'fix': '🐛 Find and fix any bugs in this code.',
-            'explain': '📖 Explain how this code works.',
-            'optimize': '⚡ Optimize this code for better performance.'
-        };
-        aiAssistant.ask(prompts[action] || '');
-    });
-});
-
 // ============================================
-// 3. CODE MANAGEMENT & PRODUCTIVITY
-// ============================================
-class CodeManager {
-    /**
-     * Save code locally
-     */
-    static saveLocally() {
-        const code = editor.getValue();
-        const timestamp = new Date().toLocaleString();
-        const backup = {
-            code: code,
-            language: currentLanguage,
-            timestamp: timestamp
-        };
-        localStorage.setItem('lastCode', code);
-        localStorage.setItem('lastBackup', JSON.stringify(backup));
-        this.showNotification('✅ Saved locally');
-    }
-
-    /**
-     * Export code as file
-     */
-    static exportCode() {
-        const code = editor.getValue();
-        const ext = this.getFileExtension(currentLanguage);
-        const fileName = prompt('Enter file name:', `code.${ext}`);
-        
-        if (!fileName) return;
-
-        const blob = new Blob([code], { type: 'text/plain' });
-        const url = URL.createObjectURL(blob);
-        const link = document.createElement('a');
-        link.href = url;
-        link.download = fileName;
-        link.click();
-        URL.revokeObjectURL(url);
-        this.showNotification(`📥 Downloaded ${fileName}`);
-    }
-
-    /**
-     * Copy code to clipboard
-     */
-    static copyCode() {
-        navigator.clipboard.writeText(editor.getValue()).then(() => {
-            this.showNotification('📋 Copied to clipboard');
-        }).catch(() => {
-            this.showNotification('❌ Copy failed', 'error');
-        });
-    }
-
-    /**
-     * Clear editor
-     */
-    static newFile() {
-        if (confirm("Create new file? Unsaved changes will be lost.")) {
-            editor.setValue("");
-            unsavedChanges = false;
-        }
-    }
-
-    /**
-     * Get file extension by language
-     */
-    static getFileExtension(lang) {
-        const map = {
-            'javascript': 'js',
-            'html': 'html',
-            'css': 'css',
-            'python': 'py',
-            'cpp': 'cpp',
-            'java': 'java'
-        };
-        return map[lang] || 'txt';
-    }
-
-    static showNotification(msg, type = 'success') {
-        const notification = document.createElement('div');
-        notification.style.cssText = `
-            position: fixed;
-            bottom: 20px;
-            right: 20px;
-            padding: 12px 16px;
-            background: ${type === 'error' ? '#ef4444' : '#10b981'};
-            color: white;
-            border-radius: 6px;
-            z-index: 9999;
-        `;
-        notification.textContent = msg;
-        document.body.appendChild(notification);
-        setTimeout(() => notification.remove(), 2000);
-    }
-}
-
-// Button Bindings
-document.getElementById('save-btn').addEventListener('click', () => CodeManager.saveLocally());
-document.getElementById('new-file').addEventListener('click', () => CodeManager.newFile());
-
-// ============================================
-// 4. LIVE PREVIEW & CODE EXECUTION
+// 6. CODE EXECUTION & PREVIEW
 // ============================================
 class CodeExecutor {
     static execute() {
@@ -448,20 +483,21 @@ class CodeExecutor {
         } else if (lang === 'css') {
             this.executeCSS(code);
         } else {
-            aiAssistant.showNotification('Preview not supported for this language', 'warning');
+            showNotification('Preview not supported for this language', 'warning');
+            return;
         }
 
-        if (window.innerWidth <= 768) {
-            switchMobileTab('bottom-panel');
-        }
+        this.switchTab('preview-content');
+        if (window.innerWidth <= 768) switchMobileTab('bottom-panel');
     }
 
     static executeHTML(code) {
-        document.getElementById('output-frame').srcdoc = code;
+        const frame = document.getElementById('output-frame');
+        frame.srcdoc = code;
     }
 
     static executeJavaScript(code) {
-        const outputFrame = document.getElementById('output-frame');
+        const frame = document.getElementById('output-frame');
         const wrappedCode = `
             <!DOCTYPE html>
             <html>
@@ -478,20 +514,22 @@ class CodeExecutor {
                         padding: 10px; 
                         border-radius: 6px;
                         margin: 5px 0;
+                        border-left: 3px solid #007aff;
                     }
                     .error { 
                         color: #ef4444; 
                         background: #fee; 
                         padding: 10px; 
                         border-radius: 6px;
+                        border-left: 3px solid #ef4444;
                     }
                 </style>
             </head>
             <body>
                 <div id="output"></div>
                 <script>
-                    const originalLog = console.log;
                     const outputs = [];
+                    const originalLog = console.log;
                     
                     console.log = function(...args) {
                         outputs.push(args.map(arg => 
@@ -513,12 +551,12 @@ class CodeExecutor {
             </body>
             </html>
         `;
-        outputFrame.srcdoc = wrappedCode;
+        frame.srcdoc = wrappedCode;
     }
 
     static executeCSS(code) {
-        const outputFrame = document.getElementById('output-frame');
-        outputFrame.srcdoc = `
+        const frame = document.getElementById('output-frame');
+        frame.srcdoc = `
             <!DOCTYPE html>
             <html>
             <head>
@@ -527,9 +565,9 @@ class CodeExecutor {
             <body>
                 <div style="padding: 20px;">
                     <h1>CSS Preview</h1>
-                    <p>Your CSS has been applied to this page.</p>
+                    <p>Your CSS styles are applied below:</p>
                     <button>Sample Button</button>
-                    <div style="margin-top: 20px; padding: 10px; border: 1px solid #ddd;">
+                    <div style="margin-top: 20px; padding: 10px; border: 1px solid #ddd; border-radius: 4px;">
                         Sample Container
                     </div>
                 </div>
@@ -537,92 +575,224 @@ class CodeExecutor {
             </html>
         `;
     }
+
+    static switchTab(tabId) {
+        document.querySelectorAll('.panel-tab').forEach(t => t.classList.remove('active'));
+        document.querySelector(`[data-target="${tabId}"]`).classList.add('active');
+        
+        document.querySelectorAll('.panel-view').forEach(v => v.classList.remove('active'));
+        document.getElementById(tabId).classList.add('active');
+    }
 }
 
-document.getElementById('run-btn').addEventListener('click', () => CodeExecutor.execute());
+// ============================================
+// 7. UI EVENT LISTENERS
+// ============================================
+function initializeEventListeners() {
+    // File operations
+    document.getElementById('new-file-btn')?.addEventListener('click', () => FileManager.createNewFile());
+    document.getElementById('save-btn')?.addEventListener('click', () => FileManager.saveFile());
+    document.getElementById('run-btn')?.addEventListener('click', () => CodeExecutor.execute());
+    
+    // AI panel
+    sendAiBtn?.addEventListener('click', () => aiAssistant.ask());
+    aiPrompt?.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter' && !e.shiftKey) {
+            e.preventDefault();
+            aiAssistant.ask();
+        }
+    });
+
+    // Quick AI tools
+    document.querySelectorAll('.tool-btn').forEach(btn => {
+        btn.addEventListener('click', () => {
+            const action = btn.getAttribute('data-action');
+            const prompts = {
+                'fix': '🐛 Find and fix any bugs in this code.',
+                'explain': '📖 Explain how this code works in detail.',
+                'optimize': '⚡ Optimize this code for better performance.',
+                'comment': '📝 Add detailed comments and documentation.',
+                'refactor': '✨ Refactor this code to be cleaner and more maintainable.',
+                'test': '🧪 Generate comprehensive test cases for this code.'
+            };
+            aiAssistant.ask(prompts[action] || action);
+        });
+    });
+
+    // Clear chat
+    document.getElementById('clear-chat')?.addEventListener('click', () => {
+        aiAssistant.clearHistory();
+    });
+
+    // Toggle AI panel
+    document.getElementById('toggle-ai')?.addEventListener('click', () => {
+        const aiPanel = document.getElementById('ai-sidebar');
+        aiPanel.classList.toggle('collapsed');
+        if (editor && isEditorReady) editor.layout();
+    });
+
+    // Bottom panel tabs
+    document.querySelectorAll('.panel-tab').forEach(tab => {
+        tab.addEventListener('click', () => {
+            document.querySelectorAll('.panel-tab').forEach(t => t.classList.remove('active'));
+            tab.classList.add('active');
+            
+            document.querySelectorAll('.panel-view').forEach(v => v.classList.remove('active'));
+            document.getElementById(tab.getAttribute('data-target')).classList.add('active');
+        });
+    });
+
+    // Panel controls
+    document.getElementById('toggle-panel')?.addEventListener('click', () => {
+        document.getElementById('bottom-panel').classList.toggle('collapsed');
+    });
+
+    document.getElementById('clear-console')?.addEventListener('click', () => {
+        document.getElementById('terminal').innerHTML = 
+            '<div class="term-line"><span class="term-prompt">nexus@ai:~$</span> Console cleared</div>';
+    });
+
+    // Mobile navigation
+    document.querySelectorAll('.m-nav-btn').forEach(btn => {
+        btn.addEventListener('click', () => {
+            const tab = btn.getAttribute('data-tab');
+            switchMobileTab(tab);
+        });
+    });
+
+    // Setup modals
+    setupModals();
+}
 
 // ============================================
-// 5. MOBILE NAVIGATION & RESPONSIVE UI
+// 8. LOCAL FILE MANAGEMENT
 // ============================================
-const mobileBtns = document.querySelectorAll('.m-nav-btn');
-const mobileSections = {
-    'explorer-drawer': document.getElementById('explorer-drawer'),
-    'monaco-container': document.getElementById('monaco-container'),
-    'ai-sidebar': document.getElementById('ai-sidebar'),
-    'bottom-panel': document.getElementById('bottom-panel')
-};
+function loadLocalFiles() {
+    const fileTree = document.getElementById('file-tree');
+    const files = [];
 
+    for (let i = 0; i < localStorage.length; i++) {
+        const key = localStorage.key(i);
+        if (key.startsWith('file_')) {
+            try {
+                const fileData = JSON.parse(localStorage.getItem(key));
+                files.push(fileData);
+            } catch (e) {
+                console.error('Error parsing file:', e);
+            }
+        }
+    }
+
+    if (files.length === 0) {
+        fileTree.innerHTML = '<div style="padding: 20px; color: var(--text-muted); text-align: center;">No files. Create one to get started!</div>';
+        return;
+    }
+
+    fileTree.innerHTML = '';
+    files.forEach(file => {
+        const item = document.createElement('div');
+        item.className = 'file-item';
+        item.innerHTML = `
+            <i class="fas fa-file-code icon-${getLanguageIcon(file.language)}"></i>
+            <span class="file-name">${file.name}</span>
+        `;
+        item.addEventListener('click', () => {
+            FileManager.openFile(file.name, file.code, file.language);
+        });
+        fileTree.appendChild(item);
+    });
+}
+
+function initializeFileManager() {
+    document.getElementById('refresh-files')?.addEventListener('click', loadLocalFiles);
+}
+
+function getLanguageIcon(lang) {
+    const iconMap = {
+        'javascript': 'js',
+        'html': 'html',
+        'css': 'css',
+        'python': 'py',
+        'cpp': 'cpp',
+        'java': 'java',
+        'typescript': 'ts',
+        'json': 'json'
+    };
+    return iconMap[lang] || 'file';
+}
+
+// ============================================
+// 9. STORAGE & UTILITIES
+// ============================================
+function updateStorageInfo() {
+    const used = JSON.stringify(localStorage).length;
+    const percentage = Math.min((used / 5242880) * 100, 100);
+    
+    document.getElementById('storage-fill').style.width = percentage + '%';
+    document.getElementById('storage-size').textContent = `${(used / 1024).toFixed(1)} KB used`;
+}
+
+function showNotification(msg, type = 'info') {
+    const container = document.getElementById('toast-container');
+    const toast = document.createElement('div');
+    toast.className = `toast ${type}`;
+    toast.innerHTML = `
+        <i class="fas fa-${type === 'success' ? 'check-circle' : type === 'error' ? 'exclamation-circle' : 'info-circle'}"></i>
+        <span>${msg}</span>
+    `;
+    container.appendChild(toast);
+    
+    setTimeout(() => {
+        toast.classList.add('out');
+        setTimeout(() => toast.remove(), 300);
+    }, 3000);
+}
+
+// ============================================
+// 10. MOBILE NAVIGATION
+// ============================================
 function switchMobileTab(target) {
+    const mobileBtns = document.querySelectorAll('.m-nav-btn');
+    const sections = ['explorer-drawer', 'editor-wrapper', 'ai-sidebar', 'bottom-panel'];
+    
     mobileBtns.forEach(b => b.classList.remove('active'));
-    Object.values(mobileSections).forEach(sec => {
-        if (sec) sec.classList.remove('mobile-active');
+    sections.forEach(sec => {
+        const el = document.getElementById(sec);
+        if (el) el.classList.remove('mobile-active');
     });
 
     const activeBtn = document.querySelector(`[data-tab="${target}"]`);
     if (activeBtn) activeBtn.classList.add('active');
 
-    if (mobileSections[target]) {
-        mobileSections[target].classList.add('mobile-active');
-
-        if (target === 'monaco-container' && editor && isEditorReady) {
+    const activeSection = document.getElementById(target);
+    if (activeSection) {
+        activeSection.classList.add('mobile-active');
+        if (target === 'editor-wrapper' && editor && isEditorReady) {
             setTimeout(() => editor.layout(), 100);
         }
     }
 }
 
-mobileBtns.forEach(btn => {
-    btn.addEventListener('click', () => {
-        const target = btn.getAttribute('data-tab');
-        switchMobileTab(target);
-    });
-});
-
-// Initialize mobile view
+// Initialize mobile on load
 if (window.innerWidth <= 768) {
-    switchMobileTab('monaco-container');
+    switchMobileTab('editor-wrapper');
 }
 
 // ============================================
-// 6. PANEL CONTROLS & UI STATE MANAGEMENT
-// ============================================
-
-// AI Sidebar Toggle
-document.getElementById('toggle-ai').addEventListener('click', () => {
-    const aiSidebar = document.getElementById('ai-sidebar');
-    aiSidebar.style.display = aiSidebar.style.display === 'none' ? 'flex' : 'none';
-    if (editor && isEditorReady) editor.layout();
-});
-
-// Bottom Panel Tabs
-document.querySelectorAll('.panel-tab').forEach(tab => {
-    tab.addEventListener('click', () => {
-        const targetId = tab.getAttribute('data-target');
-
-        document.querySelectorAll('.panel-tab').forEach(t => t.classList.remove('active'));
-        tab.classList.add('active');
-
-        document.querySelectorAll('.panel-view').forEach(v => v.classList.remove('active'));
-        document.getElementById(targetId).classList.add('active');
-    });
-});
-
-// ============================================
-// 7. KEYBOARD SHORTCUTS & ACCESSIBILITY
+// 11. KEYBOARD SHORTCUTS
 // ============================================
 document.addEventListener('keydown', (e) => {
-    if (e.ctrlKey || e.metaKey) {
-        if (e.key === 's') {
-            e.preventDefault();
-            CodeManager.saveLocally();
-        }
-        if (e.key === 'e') {
-            e.preventDefault();
-            CodeManager.exportCode();
-        }
-        if (e.key === '1') {
-            e.preventDefault();
-            switchMobileTab('explorer-drawer');
-        }
+    if ((e.ctrlKey || e.metaKey) && e.key === 's') {
+        e.preventDefault();
+        FileManager.saveFile();
+    }
+    if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') {
+        e.preventDefault();
+        CodeExecutor.execute();
+    }
+    if ((e.ctrlKey || e.metaKey) && e.key === 'k') {
+        e.preventDefault();
+        document.getElementById('inline-ai-input').focus();
     }
 });
 
@@ -635,19 +805,12 @@ window.addEventListener('beforeunload', (e) => {
 });
 
 // ============================================
-// 8. EXPOSE TO GLOBAL SCOPE
+// 12. EXPOSE GLOBAL FUNCTIONS
 // ============================================
-window.editor = editor;
-window.insertCode = function(text) {
-    if (editor && isEditorReady) {
-        const selection = editor.getSelection();
-        const range = new monaco.Range(
-            selection.startLineNumber, selection.startColumn,
-            selection.endLineNumber, selection.endColumn
-        );
-        editor.executeEdits("my-source", [{ range: range, text: text }]);
-        editor.focus();
-    }
-};
+window.FileManager = FileManager;
+window.CodeExecutor = CodeExecutor;
+window.AIAssistant = AIAssistant;
+window.switchMobileTab = switchMobileTab;
+window.showNotification = showNotification;
 
-console.log('✅ Nexus AI Editor loaded successfully v2.0');
+console.log('✅ Nexus AI Editor v3.0 loaded successfully');
